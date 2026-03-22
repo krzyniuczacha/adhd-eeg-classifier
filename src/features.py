@@ -30,11 +30,11 @@ def extract_freq_features(signal: np.ndarray, fs: int = 128) -> dict:
     }
 
     features = {}
-    total_power = np.trapz(psd, freqs)
+    total_power = np.trapezoid(psd, freqs)
 
     for band_name, (low, high) in bands.items():
         band_mask = (freqs >= low) & (freqs <= high)
-        band_power = np.trapz(psd[band_mask], freqs[band_mask])
+        band_power = np.trapezoid(psd[band_mask], freqs[band_mask])
 
         features[f'{band_name}_power'] = band_power
         features[f'{band_name}_relative'] = band_power / total_power
@@ -52,15 +52,32 @@ def extract_freq_features(signal: np.ndarray, fs: int = 128) -> dict:
 
     return features
 
+def extract_hjorth_features(signal: np.ndarray) -> dict:
+    # Parametry Hjorth'a
+    diff1 = np.diff(signal)
+    diff2 = np.diff(diff1)
+
+    activity = np.var(signal)
+    mobility = np.sqrt(np.var(diff1) / (activity + 1e-10))
+    complexity = np.sqrt(np.var(diff2) / (np.var(diff1) + 1e-10)) / (mobility + 1e-10)
+
+    return {
+        'hjorth_activity': activity,
+        'hjorth_mobility': mobility,
+        'hjorth_complexity': complexity,
+    }
+
+
 def extract_nonlinear_features(signal: np.ndarray) -> dict:
     features = {}
 
+    signal = np.asarray(signal, dtype=np.float64).copy()
     features['sample_entropy'] = ant.sample_entropy(signal) # mierzy nieprzewidywalnosc sygnalu
     features['perm_entropy'] = ant.perm_entropy(signal, normalize=True) # mierzy zlozonosc porzadku warotsci
-    features['approx_entropy'] = ant.approx_entropy(signal) # podobna do probkowej ale szybsza
+    features['approx_entropy'] = ant.app_entropy(signal) # podobna do probkowej ale szybsza
     features['higuchi_fd'] = ant.higuchi_fd(signal) # wymiar fraktalny Higuchiego - chropowatosc sygnalu
     features['katz_fd'] = ant.katz_fd(signal)  # wymiar fraktalny Katza
-    features['dfa'] = ant.detrained_fluaction(signal) # dfa - dlugozasiegowe korelacje
+    features['dfa'] = ant.detrended_fluctuation(signal) # dfa - dlugozasiegowe korelacje
 
     return features
 
@@ -77,15 +94,28 @@ def extract_cross_channel_features(epoch: np.ndarray, fs: int = 128) -> dict:
     features['min_correlation'] = np.min(upper_triangle)
     features['max_correlation'] = np.max(upper_triangle)
 
-    # Ansymetria miedzypolkolowa
-    left_channels = [0, 2, 4, 6, 8, 10, 12, 14] # Fp1, F3, C3, P3, O1, F7, T7, P7
-    right_channels = [1, 3, 5, 7, 9, 11, 13, 15] # Fp2, F4, C4, P4, O2, F8, T8, P8
+    # Asymetria miedzypolkulowa - ogolna i per pasmo
+    left_channels = [0, 2, 4, 6, 8, 10, 12, 14]   # Fp1, F3, C3, P3, O1, F7, T7, P7
+    right_channels = [1, 3, 5, 7, 9, 11, 13, 15]   # Fp2, F4, C4, P4, O2, F8, T8, P8
+    pair_names = ['Fp','F','C','P','O','F_lat','T','P_lat']
 
-    for i, (l,r) in enumerate(zip(left_channels, right_channels)):
+    bands = {'delta': (0.5, 4), 'theta': (4, 8), 'alpha': (8, 13), 'beta': (13, 30)}
+
+    for i, (l, r) in enumerate(zip(left_channels, right_channels)):
+        # asymetria ogolna
         left_power = np.var(epoch[l])
         right_power = np.var(epoch[r])
-        # Asymetria = (r - l) / (r + l)
-        features[f'assymetry_pair_{i}'] = (right_power - left_power) / (right_power + left_power + 1e-10)
+        features[f'asymmetry_{pair_names[i]}'] = (right_power - left_power) / (right_power + left_power + 1e-10)
+
+        # asymetria per pasmo
+        for band_name, (low, high) in bands.items():
+            freqs_l, psd_l = welch(epoch[l], fs=fs, nperseg=min(256, epoch.shape[1]))
+            freqs_r, psd_r = welch(epoch[r], fs=fs, nperseg=min(256, epoch.shape[1]))
+
+            mask = (freqs_l >= low) & (freqs_l <= high)
+            lp = np.trapezoid(psd_l[mask], freqs_l[mask])
+            rp = np.trapezoid(psd_r[mask], freqs_r[mask])
+            features[f'asymmetry_{pair_names[i]}_{band_name}'] = (rp - lp) / (rp + lp + 1e-10)
 
     return features
 
@@ -112,6 +142,10 @@ def extract_all_features_epoch_based(epochs: list, fs: int = 128) -> tuple:
             for k, v in freq_features.items():
                 features[f'{ch_name}_{k}'] = v
 
+            hjorth_features = extract_hjorth_features(signal)
+            for k, v in hjorth_features.items():
+                features[f'{ch_name}_{k}'] = v
+
             nonlin_features = extract_nonlinear_features(signal)
             for k, v in nonlin_features.items():
                 features[f'{ch_name}_{k}'] = v
@@ -123,8 +157,10 @@ def extract_all_features_epoch_based(epochs: list, fs: int = 128) -> tuple:
         labels.append(epoch_data['label'])
         groups.append(epoch_data['patient_id'])
 
-        X = pd.DataFrame(all_features).values
-        y = np.array(labels)
-        groups = np.array(groups)
+    df_feat = pd.DataFrame(all_features)
+    X = df_feat.values
+    y = np.array(labels)
+    groups = np.array(groups)
+    feature_names = list(df_feat.columns)
 
-        return X, y, groups
+    return X, y, groups, feature_names
