@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
+from scipy.signal import butter, filtfilt
 
 def load_data(filepath: str) -> pd.DataFrame:
     df = pd.read_csv(filepath)
@@ -20,7 +21,16 @@ def load_data(filepath: str) -> pd.DataFrame:
 
     return df
 
-def segment_into_epochs(df: pd.DataFrame, epoch_length: int = 256) -> list:
+def bandpass_filter(signal, fs=128, lowcut=0.5, highcut=40.0, order=4):
+    """Filtr pasmowy - usuwa artefakty mięśniowe (>40Hz) i drift (<0.5Hz)"""
+    nyq = fs / 2.0
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return filtfilt(b, a, signal, axis=-1)
+
+
+def segment_into_epochs(df: pd.DataFrame, epoch_length: int = 256, fs: int = 128) -> list:
     eeg_channels = [col for col in df.columns if col not in ['ID', 'Class']]
     epochs = []
 
@@ -28,17 +38,20 @@ def segment_into_epochs(df: pd.DataFrame, epoch_length: int = 256) -> list:
         label = group['Class'].iloc[0]
         signal = group[eeg_channels].values
 
-    n_epochs = len(signal) // epoch_length
-    for i in range (n_epochs):
-        start = i * epoch_length
-        end = start + epoch_length
-        epoch = signal[start:end].T
+        n_epochs = len(signal) // epoch_length
+        for i in range(n_epochs):
+            start = i * epoch_length
+            end = start + epoch_length
+            epoch = signal[start:end].T  # (n_channels, epoch_length)
 
-        epochs.append({
-            'signal': epoch,
-            'label': label,
-            'patient_id': patient_id
-        })
+            # filtr pasmowy 0.5-40 Hz - usuwa artefakty
+            epoch = bandpass_filter(epoch, fs=fs)
+
+            epochs.append({
+                'signal': epoch,
+                'label': label,
+                'patient_id': patient_id
+            })
 
     return epochs
 
@@ -66,7 +79,7 @@ def normalize_data(X_train, X_test):
     for ch in range(n_channels):
         scaler = StandardScaler()
         X_train[:, ch, :] = scaler.fit_transform(X_train[:, ch, :])
-        X_test[:, ch, :] = scaler.fit_transform(X_test[:, ch, :])
+        X_test[:, ch, :] = scaler.transform(X_test[:, ch, :])
         scalers.append(scaler)
 
     return X_train, X_test, scalers
