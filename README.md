@@ -1,114 +1,114 @@
-# Klasyfikacja ADHD na podstawie sygnałów EEG
+# ADHD Classification Based on EEG Signals
 
-Binarny klasyfikator diagnozujący ADHD na podstawie wielokanałowych sygnałów EEG (19 kanałów, system 10-20).
+A binary classifier for diagnosing ADHD based on multichannel EEG signals (19 channels, 10-20 system).
 
-Projekt zrealizowany w ramach rekrutacji do sekcji AI KN Neuron (Wiosna 2026).
+Project developed as a recruitment task for the AI section of KN Neuron (Spring 2026).
 
-## Struktura projektu
+## Project Structure
 
 ```
 adhd-eeg-classifier/
 ├── data/
-│   └── adhdata.csv              # dane EEG (Kaggle)
+│   └── adhdata.csv              # EEG data (Kaggle)
 ├── notebooks/
-│   └── eda.ipynb                # eksploracyjna analiza danych (EDA)
+│   └── eda.ipynb                # Exploratory Data Analysis (EDA)
 ├── src/
-│   ├── __init__.py              # oznaczenie pakietu Python
-│   ├── data_loader.py           # ładowanie CSV, filtracja pasmowa, segmentacja na epoki
-│   ├── features.py              # ekstrakcja cech (statystyczne, częstotliwościowe, Hjorth, nieliniowe, cross-channel)
-│   ├── model.py                 # definicje modeli (RF, SVM, CNN)
-│   ├── train.py                 # trening, cross-validation, augmentacja danych
-│   └── evaluate.py              # metryki, confusion matrix, ROC, porównanie modeli
-├── results/                     # wykresy i zapisane modele (generowane automatycznie)
-├── main.py                      # główny pipeline
+│   ├── __init__.py              # Python package marker
+│   ├── data_loader.py           # CSV loading, bandpass filtering, epoch segmentation
+│   ├── features.py              # feature extraction (statistical, frequency, Hjorth, nonlinear, cross-channel)
+│   ├── model.py                 # model definitions (RF, SVM, CNN)
+│   ├── train.py                 # training, cross-validation, data augmentation
+│   └── evaluate.py              # metrics, confusion matrix, ROC, model comparison
+├── results/                     # plots and saved models (auto-generated)
+├── main.py                      # main pipeline
 ├── requirements.txt
 └── README.md
 ```
 
-## Uruchomienie
+## Getting Started
 
 ```bash
-# 1. Klonowanie repozytorium
+# 1. Clone the repository
 git clone https://github.com/krzyniuczacha/adhd-eeg-classifier.git
 cd adhd-eeg-classifier
 
-# 2. Utworzenie środowiska wirtualnego
+# 2. Create a virtual environment
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 # source .venv/bin/activate   # Linux/Mac
 
-# 3. Instalacja zależności
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Pobranie danych
-# Pobierz zbiór z https://www.kaggle.com/datasets/danizo/eeg-dataset-for-adhd/data
-# i umieść plik adhdata.csv w folderze data/
+# 4. Download the dataset
+# Download from https://www.kaggle.com/datasets/danizo/eeg-dataset-for-adhd/data
+# and place adhdata.csv in the data/ folder
 
-# 5. Uruchomienie
+# 5. Run the pipeline
 python main.py
 ```
 
-Wyniki (wykresy, confusion matrix, krzywe ROC) zostaną zapisane w folderze `results/`.
+Results (plots, confusion matrices, ROC curves) will be saved in the `results/` folder.
 
 ## Pipeline
 
-### 1. Ładowanie i preprocessing danych
+### 1. Data Loading & Preprocessing
 
-- Usuwanie duplikatów, uzupełnianie braków medianą
-- **Filtr pasmowy Butterwortha** (0.5–40 Hz, rząd 4) — usuwa drift (<0.5 Hz) i artefakty mięśniowe (>40 Hz)
-- **Segmentacja na epoki** — 2-sekundowe okna (256 próbek przy fs=128 Hz)
+- Duplicate removal, missing value imputation with median
+- **Butterworth bandpass filter** (0.5–40 Hz, order 4) — removes drift (<0.5 Hz) and muscle artifacts (>40 Hz)
+- **Epoch segmentation** — 2-second windows (256 samples at fs=128 Hz)
 
-### 2. Ekstrakcja cech
+### 2. Feature Extraction
 
-Dla każdej epoki i każdego z 19 kanałów EEG wyznaczane są cechy z czterech kategorii:
+For each epoch and each of the 19 EEG channels, features are computed across four categories:
 
-| Kategoria | Cechy | Uzasadnienie |
-|-----------|-------|--------------|
-| **Statystyczne** | mean, std, variance, skew, kurtosis, min, max, peak-to-peak, RMS, zero crossings | Podstawowy opis rozkładu amplitudy sygnału |
-| **Częstotliwościowe** (Welch PSD) | Moc absolutna i relatywna w pasmach delta/theta/alpha/beta/gamma, theta/beta ratio, theta/alpha ratio, spectral slope, spectral entropy | Theta/beta ratio jest kluczowym biomarkerem ADHD — podwyższone theta i obniżone beta |
-| **Hjorth** | Activity, Mobility, Complexity | Klasyczne cechy EEG: moc sygnału, dominująca częstotliwość, zmienność częstotliwości |
-| **Nieliniowe** (antropy) | Sample entropy, permutation entropy, approximate entropy, Higuchi FD, Katz FD, DFA | Złożoność i regularność sygnału — ADHD wiąże się ze zmienioną dynamiką nieliniową |
+| Category | Features | Rationale |
+|----------|----------|-----------|
+| **Statistical** | mean, std, variance, skew, kurtosis, min, max, peak-to-peak, RMS, zero crossings | Basic description of the signal amplitude distribution |
+| **Frequency** (Welch PSD) | Absolute and relative power in delta/theta/alpha/beta/gamma bands, theta/beta ratio, theta/alpha ratio, spectral slope, spectral entropy | Theta/beta ratio is a key ADHD biomarker — elevated theta and reduced beta activity |
+| **Hjorth** | Activity, Mobility, Complexity | Classic EEG features: signal power, dominant frequency, frequency variability |
+| **Nonlinear** (antropy) | Sample entropy, permutation entropy, approximate entropy, Higuchi FD, Katz FD, DFA | Signal complexity and regularity — ADHD is associated with altered nonlinear dynamics |
 
-Dodatkowo cechy **cross-channel**:
-- Statystyki macierzy korelacji (mean, std, min, max)
-- **Asymetria międzypółkulowa** — ogólna i per pasmo (theta/alpha) dla 8 par elektrod (Fp1-Fp2, F3-F4, C3-C4, P3-P4, O1-O2, F7-F8, T7-T8, P7-P8)
+Additional **cross-channel** features:
+- Correlation matrix statistics (mean, std, min, max)
+- **Interhemispheric asymmetry** — overall and per band (theta/alpha) for 8 electrode pairs (Fp1-Fp2, F3-F4, C3-C4, P3-P4, O1-O2, F7-F8, T7-T8, P7-P8)
 
-**Selekcja cech:** `SelectFromModel` z Random Forest (próg: 75. percentyl ważności) — redukcja z ~690 do ~170 najistotniejszych cech.
+**Feature selection:** `SelectFromModel` with Random Forest (threshold: 75th percentile of importance) — reduces ~690 features to ~170 most relevant ones.
 
-### 3. Podział danych
+### 3. Data Split
 
-**Subject Split** (`GroupShuffleSplit`, 80/20) — dane tego samego pacjenta **nigdy** nie trafiają jednocześnie do zbioru treningowego i testowego. Zapobiega to data leakage i zapewnia rzetelną ocenę generalizacji modelu.
+**Subject Split** (`GroupShuffleSplit`, 80/20) — data from the same patient **never** appears in both training and test sets. This prevents data leakage and ensures a reliable evaluation of model generalization.
 
-### 4. Modele
+### 4. Models
 
-Porównanie czterech podejść:
+Comparison of four approaches:
 
 **Random Forest** (scikit-learn)
-- 1000 drzew, `class_weight='balanced'`, OOB score
-- Cross-validation: `StratifiedGroupKFold` (5 foldów z grupami pacjentów)
+- 1000 trees, `class_weight='balanced'`, OOB score
+- Cross-validation: `StratifiedGroupKFold` (5 folds with patient groups)
 
-**SVM z jądrem RBF** (scikit-learn)
-- `C=10.0, gamma=0.01`, zbalansowane wagi klas
-- Cross-validation jak wyżej
+**SVM with RBF kernel** (scikit-learn)
+- `C=10.0, gamma=0.01`, balanced class weights
+- Cross-validation as above
 
 **1D CNN** (PyTorch)
-- 3 bloki konwolucyjne (32→64→64 filtrów) na surowych sygnałach EEG (19×256)
-- Szerokie filtry w pierwszej warstwie (kernel=15) wyłapują wolne oscylacje delta/theta
-- Augmentacja: szum gaussowski, przesunięcia czasowe, skalowanie amplitudy, channel dropout
-- Label smoothing, BCEWithLogitsLoss z wagami klas, AdamW + CosineAnnealingWarmRestarts
-- Early stopping z patience=15
+- 3 convolutional blocks (32→64→64 filters) on raw EEG signals (19×256)
+- Wide filters in the first layer (kernel=15) capture slow delta/theta oscillations
+- Augmentation: Gaussian noise, time shifts, amplitude scaling, channel dropout
+- Label smoothing, BCEWithLogitsLoss with class weights, AdamW + CosineAnnealingWarmRestarts
+- Early stopping with patience=15
 
 **Ensemble** (Soft Voting)
-- Ważona średnia prawdopodobieństw: 45% RF + 30% SVM + 25% CNN
-- Wagi dobrane proporcjonalnie do jakości poszczególnych modeli
+- Weighted average of probabilities: 45% RF + 30% SVM + 25% CNN
+- Weights proportional to individual model performance
 
-### 5. Ewaluacja
+### 5. Evaluation
 
-- **Metryki:** Accuracy, Precision, Recall, F1-score, Classification Report
-- **Wizualizacje:** Confusion Matrix, krzywa ROC z AUC, wykres porównawczy modeli, feature importance
-- **Agregacja na poziomie pacjenta** — uśrednienie prawdopodobieństw po epokach danego pacjenta, próg 0.5
+- **Metrics:** Accuracy, Precision, Recall, F1-score, Classification Report
+- **Visualizations:** Confusion Matrix, ROC curve with AUC, model comparison chart, feature importance
+- **Patient-level aggregation** — averaging epoch probabilities per patient, threshold at 0.5
 
-## Wyniki
+## Results
 
 | Model | Accuracy | Precision | Recall | F1 |
 |-------|----------|-----------|--------|----|
@@ -117,25 +117,25 @@ Porównanie czterech podejść:
 | CNN | 0.82 | 0.81 | 0.91 | 0.86 |
 | Ensemble | **0.89** | **0.92** | **0.89** | **0.90** |
 
-Predykcja na poziomie pacjenta (Ensemble): **accuracy 0.88**, F1 0.89 na 25 pacjentach testowych.
+Patient-level prediction (Ensemble): **accuracy 0.88**, F1 0.89 on 25 test patients.
 
-![Porównanie modeli](results/model_comparison.png)
+![Model Comparison](results/model_comparison.png)
 
-### Wnioski
+### Conclusions
 
-- **Random Forest** osiągnął najlepsze wyniki spośród pojedynczych modeli (F1=0.90). Cechy ręcznie zaprojektowane (theta/beta ratio, entropia, asymetria) okazały się skuteczniejsze niż surowe sygnały podawane do CNN.
-- **SVM** wypada nieznacznie słabiej niż RF — prawdopodobnie z powodu dużej liczby cech (>150), gdzie drzewa decyzyjne radzą sobie lepiej niż kernel RBF.
-- **CNN** ma najwyższy recall (0.91) — rzadziej przegapia ADHD — ale kosztem precision. Overfitting pozostaje wyzwaniem przy małym zbiorze (~6700 epok treningowych). Augmentacja (szum, time shift, channel dropout) złagodziła problem, ale go nie wyeliminowała.
-- **Ensemble** łączy zalety wszystkich modeli i osiąga najlepszy balans metryk. Wysoki recall CNN kompensuje konserwatywność RF/SVM.
-- **Najważniejsze cechy** to theta/beta ratio, spectral entropy i asymetria międzypółkulowa w paśmie theta — co jest zgodne z literaturą kliniczną dot. ADHD.
-- Cross-validation z grupami pacjentów pokazuje dużą wariancję między foldami (acc 0.70–0.82), co sugeruje znaczną zmienność międzyosobniczą w sygnałach EEG.
+- **Random Forest** achieved the best results among individual models (F1=0.90). Hand-crafted features (theta/beta ratio, entropy, asymmetry) proved more effective than raw signals fed to CNN.
+- **SVM** performs slightly worse than RF — likely due to the high number of features (>150), where decision trees handle feature spaces better than an RBF kernel.
+- **CNN** has the highest recall (0.91) — it misses fewer ADHD cases — but at the cost of precision. Overfitting remains a challenge with a small dataset (~6700 training epochs). Augmentation (noise, time shift, channel dropout) mitigated the issue but did not fully resolve it.
+- **Ensemble** combines the strengths of all models and achieves the best overall balance of metrics. CNN's high recall compensates for the conservativeness of RF/SVM.
+- **Most important features** are theta/beta ratio, spectral entropy, and interhemispheric asymmetry in the theta band — consistent with clinical ADHD literature.
+- Cross-validation with patient groups shows high variance across folds (acc 0.70–0.82), suggesting significant inter-subject variability in EEG signals.
 
-## Technologie
+## Technologies
 
 - Python 3.13
 - PyTorch (CNN)
 - scikit-learn (Random Forest, SVM, preprocessing)
-- SciPy (filtracja sygnału, analiza częstotliwościowa)
-- antropy (cechy nieliniowe EEG)
-- matplotlib / seaborn (wizualizacje)
+- SciPy (signal filtering, frequency analysis)
+- antropy (nonlinear EEG features)
+- matplotlib / seaborn (visualizations)
 - Jupyter Notebook (EDA)
