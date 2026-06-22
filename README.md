@@ -1,8 +1,8 @@
 # ADHD Classification Based on EEG Signals
 
-A binary classifier for diagnosing ADHD based on multichannel EEG signals (19 channels, 10-20 system).
+A binary classifier for ADHD diagnosis from multichannel EEG signals (19 channels, 10-20 system), combining hand-crafted neurophysiological features with machine learning and deep learning models.
 
-Project developed as a recruitment task for the AI section of KN Neuron (Spring 2026).
+> Developed as a recruitment task for the AI section of KN Neuron (Spring 2026).
 
 ## Project Structure
 
@@ -35,20 +35,20 @@ cd adhd-eeg-classifier
 # 2. Create a virtual environment
 python -m venv .venv
 .venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/Mac
+# source .venv/bin/activate   # Linux / macOS
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Download the dataset
-# Download from https://www.kaggle.com/datasets/danizo/eeg-dataset-for-adhd/data
-# and place adhdata.csv in the data/ folder
+# Get adhdata.csv from https://www.kaggle.com/datasets/danizo/eeg-dataset-for-adhd/data
+# and place it in the data/ folder
 
 # 5. Run the pipeline
 python main.py
 ```
 
-Results (plots, confusion matrices, ROC curves) will be saved in the `results/` folder.
+All outputs — plots, confusion matrices, and ROC curves — are saved to the `results/` folder.
 
 ## Pipeline
 
@@ -77,7 +77,7 @@ Additional **cross-channel** features:
 
 ### 3. Data Split
 
-**Subject Split** (`GroupShuffleSplit`, 80/20) — data from the same patient **never** appears in both training and test sets. This prevents data leakage and ensures a reliable evaluation of model generalization.
+**Subject-level split** (`GroupShuffleSplit`, 80/20) — epochs from the same patient **never** appear in both training and test sets. This prevents data leakage and ensures the evaluation reflects true model generalization to unseen subjects.
 
 ### 4. Models
 
@@ -123,12 +123,12 @@ Patient-level prediction (Ensemble): **accuracy 0.88**, F1 0.89 on 25 test patie
 
 ### Conclusions
 
-- **Random Forest** achieved the best results among individual models (F1=0.90). Hand-crafted features (theta/beta ratio, entropy, asymmetry) proved more effective than raw signals fed to CNN.
-- **SVM** performs slightly worse than RF — likely due to the high number of features (>150), where decision trees handle feature spaces better than an RBF kernel.
-- **CNN** has the highest recall (0.91) — it misses fewer ADHD cases — but at the cost of precision. Overfitting remains a challenge with a small dataset (~6700 training epochs). Augmentation (noise, time shift, channel dropout) mitigated the issue but did not fully resolve it.
-- **Ensemble** combines the strengths of all models and achieves the best overall balance of metrics. CNN's high recall compensates for the conservativeness of RF/SVM.
-- **Most important features** are theta/beta ratio, spectral entropy, and interhemispheric asymmetry in the theta band — consistent with clinical ADHD literature.
-- Cross-validation with patient groups shows high variance across folds (acc 0.70–0.82), suggesting significant inter-subject variability in EEG signals.
+- **Random Forest** achieved the best results among individual models (F1=0.90). Hand-crafted features — theta/beta ratio, entropy, asymmetry — proved more informative than raw signals fed directly to the CNN.
+- **SVM** performs slightly below RF, likely because RBF kernels struggle with the high-dimensional feature space (>150 features) compared to tree-based splitting.
+- **CNN** achieves the highest recall (0.91), missing fewer ADHD cases, but at the cost of precision. Overfitting is a known challenge on small datasets (~6700 training epochs); augmentation (noise, time shifts, channel dropout) reduced but did not eliminate it.
+- **Ensemble** combines all three models' strengths and yields the best overall balance. CNN's high recall compensates for the conservatism of RF and SVM.
+- **Most discriminative features** are the theta/beta ratio, spectral entropy, and interhemispheric asymmetry in the theta band — consistent with established ADHD biomarker literature.
+- Group cross-validation shows high fold-to-fold variance (acc 0.70–0.82), reflecting substantial inter-subject variability in resting-state EEG.
 
 ## Technologies
 
